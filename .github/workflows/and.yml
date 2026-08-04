@@ -1,0 +1,224 @@
+name: Android 15 Google Play Persistent
+
+on:
+  workflow_dispatch:
+    inputs:
+      reset_data:
+        description: "Android userdata を初期化する"
+        required: true
+        type: boolean
+        default: false
+      keep_running_minutes:
+        description: "起動後に待機する分数"
+        required: true
+        type: number
+        default: 60
+      enable_gui:
+        description: "noVNC を起動する"
+        required: true
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+env:
+  ANDROID_SDK_ROOT: /opt/android-sdk
+  ANDROID_HOME: /opt/android-sdk
+  ANDROID_AVD_HOME: /home/runner/.android/avd
+  AVD_NAME: android15-play
+  API_LEVEL: "35"
+  IMAGE: system-images;android-35;google_apis_playstore;x86_64
+  DEVICE: pixel_7
+
+jobs:
+  android:
+    runs-on: ubuntu-24.04
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Prepare directories
+        run: |
+          mkdir -p "$ANDROID_SDK_ROOT"
+          mkdir -p "$ANDROID_AVD_HOME"
+          mkdir -p "$HOME/.android"
+
+      - name: Restore Android SDK cache
+        id: sdk-cache
+        uses: actions/cache/restore@v4
+        with:
+          path: |
+            /opt/android-sdk
+          key: android-sdk-linux-cmdline-tools-15859902-api35-v1
+
+      - name: Install Android SDK if missing
+        if: steps.sdk-cache.outputs.cache-hit != 'true'
+        run: |
+          set -euo pipefail
+
+          cd /tmp
+          curl -L -o cmdline-tools.zip \
+            https://dl.google.com/android/repository/commandlinetools-linux-15859902_latest.zip
+
+          rm -rf "$ANDROID_SDK_ROOT/cmdline-tools"
+          mkdir -p "$ANDROID_SDK_ROOT/cmdline-tools"
+
+          unzip -q cmdline-tools.zip
+          mv cmdline-tools "$ANDROID_SDK_ROOT/cmdline-tools/latest"
+
+          export PATH="$ANDROID_SDK_ROOT/cmdline-tools/latest/bin:$ANDROID_SDK_ROOT/platform-tools:$ANDROID_SDK_ROOT/emulator:$PATH"
+
+          yes | sdkmanager --licenses || true
+          sdkmanager \
+            "platform-tools" \
+            "emulator" \
+            "platforms;android-35" \
+            "build-tools;35.0.0" \
+            "system-images;android-35;google_apis_playstore;x86_64"
+
+      - name: Ensure SDK packages are installed
+        run: |
+          set -euo pipefail
+          export PATH="$ANDROID_SDK_ROOT/cmdline-tools/latest/bin:$ANDROID_SDK_ROOT/platform-tools:$ANDROID_SDK_ROOT/emulator:$PATH"
+          yes | sdkmanager --licenses || true
+          sdkmanager \
+            "platform-tools" \
+            "emulator" \
+            "platforms;android-35" \
+            "build-tools;35.0.0" \
+            "system-images;android-35;google_apis_playstore;x86_64"
+
+      - name: Restore AVD cache
+        id: avd-cache
+        uses: actions/cache/restore@v4
+        with:
+          path: |
+            /home/runner/.android/avd
+            /home/runner/.android/adbkey
+            /home/runner/.android/adbkey.pub
+          key: android-avd-play-${{ github.run_id }}
+          restore-keys: |
+            android-avd-play-
+
+      - name: Create AVD if missing
+        run: |
+          set -euo pipefail
+          export PATH="$ANDROID_SDK_ROOT/cmdline-tools/latest/bin:$ANDROID_SDK_ROOT/platform-tools:$ANDROID_SDK_ROOT/emulator:$PATH"
+
+          if [ ! -d "$ANDROID_AVD_HOME/${AVD_NAME}.avd" ]; then
+            echo "no" | avdmanager create avd \
+              --name "$AVD_NAME" \
+              --package "$IMAGE" \
+              --device "$DEVICE"
+          fi
+
+      - name: Optional wipe data
+        if: ${{ inputs.reset_data }}
+        run: |
+          set -euo pipefail
+          export PATH="$ANDROID_SDK_ROOT/cmdline-tools/latest/bin:$ANDROID_SDK_ROOT/platform-tools:$ANDROID_SDK_ROOT/emulator:$PATH"
+
+          emulator @"$AVD_NAME" -wipe-data -no-window -no-audio -no-boot-anim -gpu swiftshader_indirect > /tmp/emulator-wipe.log 2>&1 &
+          echo $! > /tmp/emulator-wipe.pid
+          adb wait-for-device
+          until [ "$(adb shell getprop sys.boot_completed 2>/dev/null | tr -d '\r')" = "1" ]; do
+            sleep 2
+          done
+          adb emu kill || true
+          sleep 5
+
+      - name: Install GUI tools
+        if: ${{ inputs.enable_gui }}
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y xvfb x11vnc websockify novnc
+
+      - name: Start noVNC stack
+        if: ${{ inputs.enable_gui }}
+        run: |
+          set -euo pipefail
+
+          export DISPLAY=:99
+          Xvfb :99 -screen 0 1280x720x24 > /tmp/xvfb.log 2>&1 &
+          echo $! > /tmp/xvfb.pid
+
+          x11vnc -display :99 -nopw -forever -shared -rfbport 5901 > /tmp/x11vnc.log 2>&1 &
+          echo $! > /tmp/x11vnc.pid
+
+          websockify --web=/usr/share/novnc/ 6080 127.0.0.1:5901 > /tmp/websockify.log 2>&1 &
+          echo $! > /tmp/websockify.pid
+
+          echo "noVNC is listening on http://127.0.0.1:6080"
+      - name: Start emulator
+        run: |
+          set -euo pipefail
+          export PATH="$ANDROID_SDK_ROOT/cmdline-tools/latest/bin:$ANDROID_SDK_ROOT/platform-tools:$ANDROID_SDK_ROOT/emulator:$PATH"
+
+          if [ "${{ inputs.enable_gui }}" = "true" ]; then
+            export DISPLAY=:99
+            nohup emulator @"$AVD_NAME" \
+              -no-audio \
+              -no-boot-anim \
+              -gpu swiftshader_indirect \
+              > /tmp/emulator.log 2>&1 &
+          else
+            nohup emulator @"$AVD_NAME" \
+              -no-window \
+              -no-audio \
+              -no-boot-anim \
+              -gpu swiftshader_indirect \
+              > /tmp/emulator.log 2>&1 &
+          fi
+
+          echo $! > /tmp/emulator.pid
+
+      - name: Wait for boot
+        run: |
+          set -euo pipefail
+          export PATH="$ANDROID_SDK_ROOT/cmdline-tools/latest/bin:$ANDROID_SDK_ROOT/platform-tools:$ANDROID_SDK_ROOT/emulator:$PATH"
+
+          adb wait-for-device
+
+          until [ "$(adb shell getprop sys.boot_completed 2>/dev/null | tr -d '\r')" = "1" ]; do
+            echo "Waiting for Android boot..."
+            sleep 2
+          done
+
+          adb shell getprop ro.build.version.release
+          adb shell getprop ro.build.version.sdk
+          adb shell pm list packages | grep -E 'com.android.vending|com.google.android.gms' || true
+
+      - name: Run your commands here
+        run: |
+          echo "ここに adb install / adb shell / テスト処理を追加できます。"
+
+      - name: Keep job alive
+        run: |
+          echo "Emulator is up. Waiting for ${{ inputs.keep_running_minutes }} minute(s)..."
+          sleep $(( ${{ inputs.keep_running_minutes }} * 60 ))
+
+      - name: Save AVD state to cache
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: |
+            /home/runner/.android/avd
+            /home/runner/.android/adbkey
+            /home/runner/.android/adbkey.pub
+          key: android-avd-play-${{ github.run_id }}
+
+      - name: Upload logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: android15-emulator-logs-${{ github.run_id }}
+          path: |
+            /tmp/emulator.log
+            /tmp/emulator-wipe.log
+            /tmp/xvfb.log
+            /tmp/x11vnc.log
+            /tmp/websockify.log
+          if-no-files-found: ignore
