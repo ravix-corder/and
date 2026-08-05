@@ -1,0 +1,168 @@
+name: macOS GUI - noVNC
+
+on:
+  workflow_dispatch:
+
+jobs:
+  macos-gui:
+    # Intel macOS: GUI/VNCの検証用
+    runs-on: macos-15-intel
+
+    timeout-minutes: 30
+
+    steps:
+      - name: Show macOS information
+        run: |
+          echo "=== macOS ==="
+          sw_vers
+
+          echo "=== Hardware ==="
+          system_profiler SPHardwareDataType
+
+          echo "=== User ==="
+          whoami
+
+          echo "=== Display ==="
+          echo "DISPLAY=$DISPLAY"
+
+      - name: Install noVNC
+        run: |
+          brew update
+          brew install --quiet novnc
+
+      - name: Check macOS GUI
+        run: |
+          echo "=== WindowServer ==="
+          pgrep -alf WindowServer || true
+
+          echo "=== Login/GUI processes ==="
+          pgrep -alf \
+            "Finder|Dock|SystemUIServer|WindowServer" || true
+
+      - name: Configure VNC
+        run: |
+          mkdir -p "$RUNNER_TEMP/novnc"
+
+          cat > "$RUNNER_TEMP/novnc/start.sh" <<'EOF'
+          #!/bin/bash
+          set -e
+
+          echo "Starting macOS Screen Sharing..."
+
+          # macOSの標準Screen Sharing/VNCサービスを確認
+          sudo launchctl print system/com.apple.screensharing 2>/dev/null || true
+
+          # VNCポート確認
+          sudo lsof -nP -iTCP:5900 -sTCP:LISTEN || true
+          EOF
+
+          chmod +x "$RUNNER_TEMP/novnc/start.sh"
+          "$RUNNER_TEMP/novnc/start.sh"
+
+      - name: Start noVNC
+        run: |
+          mkdir -p "$RUNNER_TEMP/novnc-log"
+
+          # noVNCのWeb UIを起動
+          /opt/homebrew/opt/novnc/bin/novnc_proxy \
+            --listen 6080 \
+            --vnc localhost:5900 \
+            > "$RUNNER_TEMP/novnc-log/novnc.log" 2>&1 &
+
+          NOVNC_PID=$!
+          echo "$NOVNC_PID" > "$RUNNER_TEMP/novnc.pid"
+
+          sleep 3
+
+          echo "=== noVNC process ==="
+          ps -p "$NOVNC_PID" -f || true
+
+          echo "=== noVNC log ==="
+          cat "$RUNNER_TEMP/novnc-log/novnc.log" || true
+
+      - name: Install cloudflared
+        run: |
+          brew install --quiet cloudflared
+
+      - name: Start temporary tunnel
+        run: |
+          cloudflared tunnel \
+            --url http://127.0.0.1:6080 \
+            --no-autoupdate \
+            > "$RUNNER_TEMP/cloudflared.log" 2>&1 &
+
+          CLOUDFLARED_PID=$!
+          echo "$CLOUDFLARED_PID" > "$RUNNER_TEMP/cloudflared.pid"
+
+          echo "Waiting for tunnel..."
+          sleep 8
+
+          cat "$RUNNER_TEMP/cloudflared.log"
+
+          URL=$(grep -oE \
+            'https://[-a-zA-Z0-9]+\.trycloudflare\.com' \
+            "$RUNNER_TEMP/cloudflared.log" \
+            | head -n 1 || true)
+
+          echo ""
+          echo "=========================================="
+          echo " noVNC URL"
+          echo "=========================================="
+
+          if [ -n "$URL" ]; then
+            echo "$URL/vnc.html"
+          else
+            echo "Tunnel URL was not detected."
+          fi
+
+          echo "=========================================="
+
+      - name: Keep GUI alive
+        run: |
+          echo "Keeping the runner alive for remote GUI testing."
+
+          for i in {1..25}; do
+            echo "[$i/25]"
+
+            echo "--- WindowServer ---"
+            pgrep -alf WindowServer || true
+
+            echo "--- VNC ---"
+            sudo lsof -nP -iTCP:5900 -sTCP:LISTEN || true
+
+            echo "--- noVNC ---"
+            sudo lsof -nP -iTCP:6080 -sTCP:LISTEN || true
+
+            sleep 60
+          done
+
+      - name: Collect diagnostics
+        if: always()
+        run: |
+          mkdir -p "$RUNNER_TEMP/diagnostics"
+
+          sw_vers > "$RUNNER_TEMP/diagnostics/sw_vers.txt"
+          system_profiler SPHardwareDataType \
+            > "$RUNNER_TEMP/diagnostics/hardware.txt" || true
+
+          pgrep -alf WindowServer \
+            > "$RUNNER_TEMP/diagnostics/windowserver.txt" || true
+
+          sudo lsof -nP -iTCP:5900 -sTCP:LISTEN \
+            > "$RUNNER_TEMP/diagnostics/vnc.txt" || true
+
+          sudo lsof -nP -iTCP:6080 -sTCP:LISTEN \
+            > "$RUNNER_TEMP/diagnostics/novnc.txt" || true
+
+          cp "$RUNNER_TEMP/novnc-log/novnc.log" \
+            "$RUNNER_TEMP/diagnostics/" 2>/dev/null || true
+
+          cp "$RUNNER_TEMP/cloudflared.log" \
+            "$RUNNER_TEMP/diagnostics/" 2>/dev/null || true
+
+      - name: Upload diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-gui-diagnostics
+          path: ${{ runner.temp }}/diagnostics/
