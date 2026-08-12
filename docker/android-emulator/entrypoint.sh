@@ -10,6 +10,8 @@ export EMULATOR_HEIGHT="${EMULATOR_HEIGHT:-1920}"
 export EMULATOR_DENSITY="${EMULATOR_DENSITY:-420}"
 export EMULATOR_MEMORY_MB="${EMULATOR_MEMORY_MB:-2048}"
 export NOVNC_PORT="${NOVNC_PORT:-6080}"
+export NOVNC_BACKEND_PORT="${NOVNC_BACKEND_PORT:-6081}"
+export NOVNC_PASSWORD="${NOVNC_PASSWORD:-}"
 
 log() {
   printf '[android-remote] %s\n' "$*"
@@ -29,8 +31,16 @@ if [[ ! -c /dev/kvm ]]; then
   exit 1
 fi
 
-mkdir -p "${ANDROID_AVD_HOME}"
-rm -f /tmp/android-ready /tmp/.X0-lock
+if [[ -z "${NOVNC_PASSWORD}" ]]; then
+  log "ERROR: NOVNC_PASSWORD must be provided."
+  exit 1
+fi
+
+mkdir -p "${ANDROID_AVD_HOME}" /tmp/nginx-client-body /tmp/nginx-proxy \
+  /tmp/nginx-fastcgi /tmp/nginx-uwsgi /tmp/nginx-scgi
+rm -f /tmp/android-ready /tmp/.X0-lock /tmp/noVNC.htpasswd
+umask 077
+printf '%s\n' "${NOVNC_PASSWORD}" | htpasswd -i -B -c /tmp/noVNC.htpasswd android > /dev/null
 
 log "Starting virtual display ${DISPLAY} (${EMULATOR_WIDTH}x${EMULATOR_HEIGHT})."
 Xvfb "${DISPLAY}" \
@@ -59,9 +69,12 @@ x11vnc \
 
 websockify \
   --web /usr/share/novnc \
-  "${NOVNC_PORT}" \
+  "127.0.0.1:${NOVNC_BACKEND_PORT}" \
   localhost:5900 \
   > /tmp/websockify.log 2>&1 &
+
+nginx -t > /tmp/nginx.log 2>&1
+nginx -g 'daemon off;' > /tmp/nginx.log 2>&1 &
 
 log "Starting Android 14 / Google Play AVD '${AVD_NAME}'."
 emulator \
@@ -105,5 +118,5 @@ adb shell settings put global transition_animation_scale 0 || true
 adb shell settings put global animator_duration_scale 0 || true
 touch /tmp/android-ready
 
-log "Android is ready. noVNC is listening on port ${NOVNC_PORT}."
+log "Android is ready. Authenticated noVNC is listening on port ${NOVNC_PORT}."
 wait "${emulator_pid}"

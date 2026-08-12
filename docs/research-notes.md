@@ -10,3 +10,8 @@
 | 公開保護 | Cloudflare Access は公開ホスト名の前に認証・許可ポリシーを置ける。Access 未設定の公開アプリケーションはインターネット公開される。 | [Publish a self-hosted application](https://developers.cloudflare.com/cloudflare-one/access-controls/applications/http-apps/self-hosted-public-app/) |
 
 通常版 Docker-Android は README 上で Google Play Store を未対応としているため、本実装は SDK の `system-images;android-34;google_apis_playstore;x86_64` を Dockerfile 内で明示的に取得する独自イメージ方式を採用する。
+
+| Quick Tunnel | `cloudflared tunnel --url http://localhost:8080` は Cloudflare アカウントや DNS 設定なしでランダムな `trycloudflare.com` サブドメインを発行する。 | [Cloudflare Quick Tunnels](https://developers.cloudflare.com/cloudflare-one/networks/connectors/cloudflare-tunnel/do-more-with-tunnels/trycloudflare/) |
+| Quick Tunnel の制約 | テスト・開発用途限定で、SLA はなく、同時プロキシ要求は 200 件まで、SSE は非対応。 | [Cloudflare Quick Tunnels](https://developers.cloudflare.com/cloudflare-one/networks/connectors/cloudflare-tunnel/do-more-with-tunnels/trycloudflare/) |
+
+Quick Tunnel は Cloudflare Access の保護を設定できないため、noVNC 側で VNC パスワードを必須にする。パスワードは GitHub Actions シークレットで与え、Quick Tunnel の URL と組み合わせて接続を制限する。

@@ -28,8 +28,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 120
     env:
-      CLOUDFLARE_TUNNEL_TOKEN: ${{ secrets.CLOUDFLARE_TUNNEL_TOKEN }}
-      ANDROID_REMOTE_URL: ${{ vars.ANDROID_REMOTE_URL }}
+      NOVNC_PASSWORD: ${{ secrets.NOVNC_PASSWORD }}
       SESSION_MINUTES: ${{ inputs.session_minutes }}
       IMAGE_NAME: remote-android:api-34-playstore
 
@@ -59,10 +58,15 @@ jobs:
             --tag "${IMAGE_NAME}" \
             .
 
-      - name: Start Android emulator and noVNC
+      - name: Start password-protected Android emulator
         shell: bash
         run: |
           set -Eeuo pipefail
+          if [ -z "${NOVNC_PASSWORD:-}" ]; then
+            echo 'Repository secret NOVNC_PASSWORD is required.' >&2
+            exit 1
+          fi
+
           docker run --detach --rm \
             --name remote-android \
             --device /dev/kvm \
@@ -71,6 +75,7 @@ jobs:
             --cpus=2 \
             --memory=6g \
             --security-opt no-new-privileges:true \
+            --env NOVNC_PASSWORD \
             "${IMAGE_NAME}"
 
           for _ in $(seq 1 90); do
@@ -106,50 +111,48 @@ jobs:
           install -m 0755 /tmp/cloudflared /usr/local/bin/cloudflared
           cloudflared --version
 
-      - name: Start protected Cloudflare Tunnel
+      - name: Start account-free Cloudflare Quick Tunnel
         shell: bash
         run: |
           set -Eeuo pipefail
-          if [ -z "${CLOUDFLARE_TUNNEL_TOKEN:-}" ]; then
-            echo 'Repository secret CLOUDFLARE_TUNNEL_TOKEN is required.' >&2
-            exit 1
-          fi
-          if [ -z "${ANDROID_REMOTE_URL:-}" ]; then
-            echo 'Repository variable ANDROID_REMOTE_URL is required.' >&2
-            exit 1
-          fi
-
-          cloudflared tunnel --no-autoupdate run \
-            --token "${CLOUDFLARE_TUNNEL_TOKEN}" \
+          cloudflared tunnel --url http://127.0.0.1:6080 \
             > /tmp/cloudflared.log 2>&1 &
           echo $! > /tmp/cloudflared.pid
 
-          for _ in $(seq 1 30); do
+          quick_tunnel_url=''
+          for _ in $(seq 1 60); do
             if ! kill -0 "$(cat /tmp/cloudflared.pid)" 2>/dev/null; then
-              echo 'cloudflared stopped before connecting.' >&2
+              echo 'cloudflared stopped before creating a Quick Tunnel.' >&2
               cat /tmp/cloudflared.log >&2 || true
               exit 1
             fi
-            if grep -q 'Registered tunnel connection' /tmp/cloudflared.log; then
+            quick_tunnel_url="$(grep -Eo \
+              'https://[-a-z0-9]+\.trycloudflare\.com' \
+              /tmp/cloudflared.log | tail -n 1 || true)"
+            if [ -n "${quick_tunnel_url}" ]; then
               break
             fi
             sleep 1
           done
-          if ! grep -q 'Registered tunnel connection' /tmp/cloudflared.log; then
-            echo 'cloudflared did not connect within 30 seconds.' >&2
+          if [ -z "${quick_tunnel_url}" ]; then
+            echo 'Cloudflare did not return a Quick Tunnel URL' >&2
+            echo 'within 60 seconds.' >&2
             cat /tmp/cloudflared.log >&2 || true
             exit 1
           fi
 
-          remote_url="${ANDROID_REMOTE_URL%/}/vnc.html?autoconnect=true&resize=remote"
+          remote_url="${quick_tunnel_url}/vnc.html?autoconnect=true&resize=remote"
           {
             echo '## Remote Android is ready'
             echo
             echo "Open **[noVNC remote console](${remote_url})** in a browser."
             echo
+            echo 'HTTP Basic authentication is required.'
+            echo 'Username: `android`'
+            echo 'Password: the `NOVNC_PASSWORD` GitHub Actions secret.'
+            echo
             echo "Session duration: **${SESSION_MINUTES} minutes**."
-            echo 'Cloudflare Access must protect this endpoint.'
-            echo 'VNC is not directly exposed on the runner network.'
+            echo 'This is a temporary Quick Tunnel for development only.'
           } >> "${GITHUB_STEP_SUMMARY}"
           echo "Remote noVNC URL: ${remote_url}"
 

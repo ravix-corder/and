@@ -13,8 +13,10 @@ ENV ANDROID_HOME=/opt/android-sdk \
 
 RUN apt-get update \
     && apt-get install --no-install-recommends -y \
+        apache2-utils \
         ca-certificates \
         curl \
+        nginx \
         openbox \
         openjdk-17-jre-headless \
         novnc \
@@ -58,6 +60,7 @@ RUN apt-get update \
         >> /home/android/.android/avd/remote_android_14.avd/config.ini \
     && chown -R android:android /home/android /opt/android-sdk
 
+COPY docker/android-emulator/nginx.conf /etc/nginx/nginx.conf
 COPY --chmod=0755 docker/android-emulator/entrypoint.sh /usr/local/bin/start-android
 
 USER android
