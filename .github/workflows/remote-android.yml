@@ -106,11 +106,11 @@ jobs:
         shell: bash
         run: |
           set -Eeuo pipefail
+          release_url='https://github.com/cloudflare/cloudflared/releases/latest/download'
           curl --fail --location --retry 5 --retry-all-errors \
-            https://github.com/cloudflare/cloudflared/releases/latest/download/\
-            cloudflared-linux-amd64 \
+            "${release_url}/cloudflared-linux-amd64" \
             --output /tmp/cloudflared
-          install -m 0755 /tmp/cloudflared /usr/local/bin/cloudflared
+          sudo install -m 0755 /tmp/cloudflared /usr/local/bin/cloudflared
           cloudflared --version
 
       - name: Start account-free Cloudflare Quick Tunnel
