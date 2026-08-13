@@ -76,6 +76,13 @@ websockify \
 nginx -t > /tmp/nginx.log 2>&1
 nginx -g 'daemon off;' > /tmp/nginx.log 2>&1 &
 
+log 'Initializing the local ADB key and server.'
+mkdir -p "${HOME}/.android"
+rm -f "${HOME}/.android/adbkey" "${HOME}/.android/adbkey.pub"
+adb keygen "${HOME}/.android/adbkey"
+adb kill-server || true
+adb start-server
+
 log "Starting Android 14 / Google Play AVD '${AVD_NAME}'."
 emulator \
   "@${AVD_NAME}" \
