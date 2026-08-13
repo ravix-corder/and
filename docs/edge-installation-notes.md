@@ -23,3 +23,7 @@
 - 表示された既知の署名: SHA-1 `3f640e279f63bcea71082ae7e8c7efa2da014cad`、SHA-256 `01e1999710a82c2749b4d50c445dc85d670b6136089d0a766a73827c82a1eac9`。証明書の所有者は Microsoft Corporation と表示された。
 
 導入時には、ダウンロード済み APK の SHA-256 を記録し、Android パッケージ名・バージョン・起動可否を ADB で確認する。
+
+## 取得時の制約
+
+APKMirror の最終配布 URL は GitHub Actions ランナーから HTTP 403 を返し、通常の `curl`・参照元・ブラウザ風 User-Agent のいずれでも自動取得できなかった。ブラウザ経由のダウンロード操作も人間確認ページへ遷移したため、このサイトの検証回避は行わない。代替配布元を用いる場合も、導入前に `apksigner` で Microsoft の SHA-256 証明書指紋との一致を検証する。

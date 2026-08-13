@@ -31,8 +31,6 @@ jobs:
       NOVNC_PASSWORD: ${{ secrets.NOVNC_PASSWORD }}
       SESSION_MINUTES: ${{ inputs.session_minutes }}
       IMAGE_NAME: remote-android:api-34-playstore
-      EDGE_APK_URL: >-
-        https://downloadr2.apkmirror.com/wp-content/uploads/2026/08/28/microsoft-edge-151-0-4129-70-android-apk-download-069fe0fffa11ed701c6eaa41feac1e18a3aea7f6.apk
 
     steps:
       - name: Check out repository
@@ -109,8 +107,7 @@ jobs:
         run: |
           set -Eeuo pipefail
           edge_apk="${RUNNER_TEMP}/microsoft-edge.apk"
-          curl --fail --location --retry 5 --retry-all-errors \
-            "${EDGE_APK_URL}" --output "${edge_apk}"
+          bash scripts/download-microsoft-edge-apk.sh "${edge_apk}"
           sha256sum "${edge_apk}"
           docker cp "${edge_apk}" remote-android:/tmp/microsoft-edge.apk
           edge_signature="$(docker exec remote-android \
