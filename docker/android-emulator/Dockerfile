@@ -9,7 +9,7 @@ ENV ANDROID_HOME=/opt/android-sdk \
     ANDROID_SDK_ROOT=/opt/android-sdk \
     ANDROID_AVD_HOME=/home/android/.android/avd \
     DISPLAY=:0 \
-    PATH=/opt/android-sdk/cmdline-tools/latest/bin:/opt/android-sdk/emulator:/opt/android-sdk/platform-tools:${PATH}
+    PATH=/opt/android-sdk/cmdline-tools/latest/bin:/opt/android-sdk/emulator:/opt/android-sdk/platform-tools:/opt/android-sdk/build-tools/35.0.0:${PATH}
 
 RUN apt-get update \
     && apt-get install --no-install-recommends -y \
@@ -43,6 +43,7 @@ RUN apt-get update \
     && sdkmanager \
         "emulator" \
         "platform-tools" \
+        "build-tools;35.0.0" \
         "platforms;android-34" \
         "system-images;android-34;google_apis_playstore;x86_64" \
     && mkdir -p /home/android/.android/avd \
@@ -62,6 +63,7 @@ RUN apt-get update \
     && chown -R android:android /home/android /opt/android-sdk
 
 COPY docker/android-emulator/nginx.conf /etc/nginx/nginx.conf
+COPY docker/android-emulator/viewer.html /usr/share/nginx/html/viewer.html
 COPY --chmod=0755 docker/android-emulator/entrypoint.sh /usr/local/bin/start-android
 
 USER android

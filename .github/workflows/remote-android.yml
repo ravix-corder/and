@@ -31,6 +31,8 @@ jobs:
       NOVNC_PASSWORD: ${{ secrets.NOVNC_PASSWORD }}
       SESSION_MINUTES: ${{ inputs.session_minutes }}
       IMAGE_NAME: remote-android:api-34-playstore
+      EDGE_APK_URL: >-
+        https://downloadr2.apkmirror.com/wp-content/uploads/2026/08/28/microsoft-edge-151-0-4129-70-android-apk-download-069fe0fffa11ed701c6eaa41feac1e18a3aea7f6.apk
 
     steps:
       - name: Check out repository
@@ -102,6 +104,46 @@ jobs:
             'tail -n 120 /tmp/emulator.log /tmp/xvfb.log /tmp/nginx.log' || true
           exit 1
 
+      - name: Install and verify Microsoft Edge
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          edge_apk="${RUNNER_TEMP}/microsoft-edge.apk"
+          curl --fail --location --retry 5 --retry-all-errors \
+            "${EDGE_APK_URL}" --output "${edge_apk}"
+          sha256sum "${edge_apk}"
+          docker cp "${edge_apk}" remote-android:/tmp/microsoft-edge.apk
+          edge_signature="$(docker exec remote-android \
+            apksigner verify --print-certs /tmp/microsoft-edge.apk)"
+          printf '%s\n' "${edge_signature}"
+          printf '%s\n' "${edge_signature}" | grep -qi \
+            '01e1999710a82c2749b4d50c445dc85d670b6136089d0a766a73827c82a1eac9'
+          docker exec remote-android adb install -r /tmp/microsoft-edge.apk
+
+          edge_version="$(docker exec remote-android \
+            adb shell dumpsys package com.microsoft.emmx | tr -d '\r' \
+            | sed -n 's/.*versionName=//p' | head -n 1)"
+          test -n "${edge_version}"
+          echo "EDGE_VERSION=${edge_version}" >> "${GITHUB_ENV}"
+
+          docker exec remote-android adb shell monkey \
+            -p com.microsoft.emmx -c android.intent.category.LAUNCHER 1
+          for _ in $(seq 1 15); do
+            foreground="$(docker exec remote-android \
+              adb shell dumpsys activity activities | tr -d '\r' \
+              | grep -m 1 'mResumedActivity' || true)"
+            if printf '%s' "${foreground}" | grep -q 'com.microsoft.emmx'; then
+              echo "Microsoft Edge ${edge_version} is running."
+              exit 0
+            fi
+            sleep 1
+          done
+
+          echo 'Microsoft Edge did not reach the foreground.' >&2
+          docker exec remote-android \
+            adb shell dumpsys activity activities || true
+          exit 1
+
       - name: Verify local noVNC authentication
         shell: bash
         run: |
@@ -166,7 +208,7 @@ jobs:
             --user "android:${NOVNC_PASSWORD}" \
             --output /dev/null "${quick_tunnel_url}/vnc.html"
 
-          remote_url="${quick_tunnel_url}/vnc.html?autoconnect=true&resize=remote"
+          remote_url="${quick_tunnel_url}/viewer.html"
           {
             echo '## Remote Android is ready'
             echo
@@ -176,6 +218,8 @@ jobs:
             echo 'Username: `android`'
             echo 'Password: the `NOVNC_PASSWORD` GitHub Actions secret.'
             echo
+            echo "Microsoft Edge: **${EDGE_VERSION}** (installed and launched)."
+            echo 'Display: fixed 1080×1920 Android screen, centered and scaled.'
             echo "Session duration: **${SESSION_MINUTES} minutes**."
             echo 'This is a temporary Quick Tunnel for development only.'
           } >> "${GITHUB_STEP_SUMMARY}"
@@ -184,6 +228,8 @@ jobs:
             echo "noVNC URL: ${remote_url}"
             echo 'Username: android'
             echo 'Password: the NOVNC_PASSWORD GitHub Actions secret'
+            echo "Microsoft Edge: ${EDGE_VERSION} (installed and launched)"
+            echo 'Display: fixed 1080x1920, centered and scaled'
             echo "Session duration: ${SESSION_MINUTES} minutes"
           } > "${RUNNER_TEMP}/remote-android-connection.txt"
 
