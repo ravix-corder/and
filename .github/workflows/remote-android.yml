@@ -123,6 +123,7 @@ jobs:
           test -n "${edge_version}"
           echo "EDGE_VERSION=${edge_version}" >> "${GITHUB_ENV}"
 
+          docker exec remote-android adb logcat -c
           docker exec remote-android adb shell monkey \
             -p com.microsoft.emmx -c android.intent.category.LAUNCHER 1
           for _ in $(seq 1 15); do
@@ -139,6 +140,8 @@ jobs:
           echo 'Microsoft Edge did not reach the foreground.' >&2
           docker exec remote-android \
             adb shell dumpsys activity activities || true
+          docker exec remote-android adb logcat -d -v threadtime \
+            | tail -n 500 || true
           exit 1
 
       - name: Verify local noVNC authentication
