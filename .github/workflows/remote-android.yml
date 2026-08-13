@@ -180,6 +180,20 @@ jobs:
             echo 'This is a temporary Quick Tunnel for development only.'
           } >> "${GITHUB_STEP_SUMMARY}"
           echo "Remote noVNC URL: ${remote_url}"
+          {
+            echo "noVNC URL: ${remote_url}"
+            echo 'Username: android'
+            echo 'Password: the NOVNC_PASSWORD GitHub Actions secret'
+            echo "Session duration: ${SESSION_MINUTES} minutes"
+          } > "${RUNNER_TEMP}/remote-android-connection.txt"
+
+      - name: Upload remote connection details
+        uses: actions/upload-artifact@v4
+        with:
+          name: remote-android-connection
+          path: ${{ runner.temp }}/remote-android-connection.txt
+          if-no-files-found: error
+          retention-days: 1
 
       - name: Keep remote session available
         shell: bash
