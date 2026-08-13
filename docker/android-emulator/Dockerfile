@@ -17,6 +17,7 @@ RUN apt-get update \
         ca-certificates \
         curl \
         nginx \
+        libpulse0 \
         openbox \
         openjdk-17-jre-headless \
         novnc \
