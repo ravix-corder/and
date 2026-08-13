@@ -29,8 +29,8 @@ RUN apt-get update \
         x11vnc \
         xvfb \
     && rm -rf /var/lib/apt/lists/* \
-    && groupadd --gid 1000 android \
-    && useradd --create-home --uid 1000 --gid android --shell /bin/bash android \
+    && groupadd --system android \
+    && useradd --system --create-home --gid android --shell /bin/bash android \
     && mkdir -p /opt/android-sdk/cmdline-tools \
     && curl --fail --location --retry 5 --retry-all-errors \
         "https://dl.google.com/android/repository/commandlinetools-linux-${CMDLINE_TOOLS_REV}_latest.zip" \
