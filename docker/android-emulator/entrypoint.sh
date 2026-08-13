@@ -93,7 +93,7 @@ emulator_pid=$!
 
 log "Waiting for Android boot completion."
 booted="false"
-for _ in $(seq 1 180); do
+for _ in $(seq 1 300); do
   if ! kill -0 "${emulator_pid}" 2>/dev/null; then
     log "ERROR: Android emulator exited during startup."
     tail -n 120 /tmp/emulator.log >&2 || true

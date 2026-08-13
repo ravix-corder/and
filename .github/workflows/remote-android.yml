@@ -78,7 +78,7 @@ jobs:
             --env NOVNC_PASSWORD \
             "${IMAGE_NAME}"
 
-          for _ in $(seq 1 90); do
+          for _ in $(seq 1 360); do
             state_format='{{.State.Running}}'
             container_name=remote-android
             running="$(docker inspect --format "${state_format}" \
@@ -98,6 +98,8 @@ jobs:
 
           echo 'Timed out waiting for Android emulator boot.' >&2
           docker logs remote-android || true
+          docker exec remote-android sh -c \
+            'tail -n 120 /tmp/emulator.log /tmp/xvfb.log /tmp/nginx.log' || true
           exit 1
 
       - name: Install cloudflared
