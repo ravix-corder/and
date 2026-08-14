@@ -94,7 +94,7 @@ jobs:
             --env NOVNC_PASSWORD \
             --env EMULATOR_WIDTH=1920 \
             --env EMULATOR_HEIGHT=1080 \
-            --env EMULATOR_DENSITY=840 \
+            --env EMULATOR_DENSITY=420 \
             "${IMAGE_NAME}"
 
           for _ in $(seq 1 360); do
@@ -338,7 +338,7 @@ jobs:
             echo
             echo "Microsoft Edge: **${EDGE_STATUS}**."
             echo "Microsoft Bing: **${BING_STATUS}**."
-            echo 'Display: large 1920×1080 landscape Android screen with enlarged Android UI, directly scaled to the browser.'
+            echo 'Display: large 1920×1080 landscape Android screen with standard Android UI, directly scaled to the browser.'
             echo "Session duration: **${SESSION_MINUTES} minutes**."
             echo 'This is a temporary Quick Tunnel for development only.'
           } >> "${GITHUB_STEP_SUMMARY}"
@@ -349,7 +349,7 @@ jobs:
             echo 'Password: the NOVNC_PASSWORD GitHub Actions secret'
             echo "Microsoft Edge: ${EDGE_STATUS}"
             echo "Microsoft Bing: ${BING_STATUS}"
-            echo 'Display: large 1920x1080 landscape Android screen with enlarged Android UI, directly scaled to the browser'
+            echo 'Display: large 1920x1080 landscape Android screen with standard Android UI, directly scaled to the browser'
             echo "Session duration: ${SESSION_MINUTES} minutes"
           } > "${RUNNER_TEMP}/remote-android-connection.txt"
 

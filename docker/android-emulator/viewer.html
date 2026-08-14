@@ -37,6 +37,51 @@
         touch-action: none;
       }
 
+      #display-controls {
+        position: fixed;
+        z-index: 10;
+        top: max(12px, env(safe-area-inset-top));
+        right: max(12px, env(safe-area-inset-right));
+        display: flex;
+        gap: 8px;
+        padding: 8px;
+        border: 1px solid rgb(255 255 255 / 22%);
+        border-radius: 12px;
+        background: rgb(20 24 28 / 86%);
+        box-shadow: 0 6px 22px rgb(0 0 0 / 45%);
+        backdrop-filter: blur(8px);
+      }
+
+      #display-controls button {
+        min-height: 40px;
+        padding: 8px 12px;
+        border: 1px solid rgb(255 255 255 / 28%);
+        border-radius: 8px;
+        color: #fff;
+        background: #2c3540;
+        font: 600 14px/1 system-ui, sans-serif;
+        cursor: pointer;
+      }
+
+      #display-controls button[aria-pressed="true"] {
+        border-color: #8fc6ff;
+        background: #176cb4;
+      }
+
+      #display-hint {
+        position: fixed;
+        z-index: 10;
+        right: max(12px, env(safe-area-inset-right));
+        bottom: max(12px, env(safe-area-inset-bottom));
+        max-width: min(420px, calc(100vw - 24px));
+        margin: 0;
+        padding: 8px 11px;
+        border-radius: 8px;
+        color: #fff;
+        background: rgb(20 24 28 / 82%);
+        font: 13px/1.4 system-ui, sans-serif;
+      }
+
       @supports not (height: 100dvh) {
         html,
         body,
@@ -51,27 +96,78 @@
     <main>
       <div id="screen" aria-label="Android remote display"></div>
     </main>
+    <nav id="display-controls" aria-label="表示操作">
+      <button id="fit-button" type="button" aria-pressed="true">標準</button>
+      <button id="zoom-button" type="button" aria-pressed="false">拡大</button>
+      <button id="move-button" type="button" aria-pressed="false" disabled>画面を移動</button>
+    </nav>
+    <p id="display-hint">「拡大」で Android UI は変えずに映像だけを大きく表示します。</p>
     <script type="module">
       import RFB from '/core/rfb.js';
 
       const screen = document.getElementById('screen');
+      const fitButton = document.getElementById('fit-button');
+      const zoomButton = document.getElementById('zoom-button');
+      const moveButton = document.getElementById('move-button');
+      const hint = document.getElementById('display-hint');
       const websocketProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
       const websocketUrl = `${websocketProtocol}//${window.location.host}/websockify`;
       let rfb;
       let reconnectTimer;
+      let zoomed = false;
+      let moving = false;
+
+      function updateControls() {
+        fitButton.setAttribute('aria-pressed', String(!zoomed));
+        zoomButton.setAttribute('aria-pressed', String(zoomed));
+        moveButton.disabled = !zoomed;
+        moveButton.setAttribute('aria-pressed', String(moving));
+        moveButton.textContent = moving ? '操作へ戻る' : '画面を移動';
+        hint.textContent = zoomed
+          ? (moving
+              ? '画面をドラッグして位置を変え、「操作へ戻る」を押してください。'
+              : '拡大表示中です。必要な場合は「画面を移動」を押して表示位置を変えられます。')
+          : '「拡大」で Android UI は変えずに映像だけを大きく表示します。';
+      }
+
+      function applyDisplayMode() {
+        if (!rfb) return;
+        rfb.scaleViewport = !zoomed;
+        rfb.clipViewport = zoomed;
+        rfb.dragViewport = zoomed && moving;
+        updateControls();
+      }
 
       function connect() {
         window.clearTimeout(reconnectTimer);
         rfb = new RFB(screen, websocketUrl);
-        rfb.scaleViewport = true;
-        rfb.clipViewport = false;
         rfb.viewOnly = false;
+        applyDisplayMode();
 
         rfb.addEventListener('disconnect', () => {
           reconnectTimer = window.setTimeout(connect, 1000);
         });
       }
 
+      fitButton.addEventListener('click', () => {
+        zoomed = false;
+        moving = false;
+        applyDisplayMode();
+      });
+
+      zoomButton.addEventListener('click', () => {
+        zoomed = true;
+        moving = false;
+        applyDisplayMode();
+      });
+
+      moveButton.addEventListener('click', () => {
+        if (!zoomed) return;
+        moving = !moving;
+        applyDisplayMode();
+      });
+
+      updateControls();
       connect();
     </script>
   </body>
