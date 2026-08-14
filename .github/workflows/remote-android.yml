@@ -14,6 +14,19 @@ name: Remote Android 14 (Google Play)
           - '30'
           - '45'
           - '60'
+      install_user_apks:
+        description: 'Install the supplied Microsoft Bing and Edge APK files'
+        required: true
+        default: false
+        type: boolean
+      bing_apk_url:
+        description: 'HTTPS URL of the signed Microsoft Bing APK'
+        required: false
+        type: string
+      edge_apk_url:
+        description: 'HTTPS URL of the signed x86 Microsoft Edge APK'
+        required: false
+        type: string
 
 permissions:
   contents: read
@@ -31,6 +44,9 @@ jobs:
       NOVNC_PASSWORD: ${{ secrets.NOVNC_PASSWORD }}
       SESSION_MINUTES: ${{ inputs.session_minutes }}
       IMAGE_NAME: remote-android:api-34-playstore
+      INSTALL_USER_APKS: ${{ inputs.install_user_apks }}
+      BING_APK_URL: ${{ inputs.bing_apk_url }}
+      EDGE_APK_URL: ${{ inputs.edge_apk_url }}
 
     steps:
       - name: Check out repository
@@ -102,36 +118,88 @@ jobs:
             'tail -n 120 /tmp/emulator.log /tmp/xvfb.log /tmp/nginx.log' || true
           exit 1
 
-      - name: Install and verify Microsoft Edge
+      - name: Install and verify supplied Microsoft apps
         shell: bash
         run: |
           set -Eeuo pipefail
+          edge_version='not installed'
+          bing_status='not requested'
+          if [ "${INSTALL_USER_APKS}" != 'true' ]; then
+            echo 'No user APK installation was requested.'
+            echo "EDGE_VERSION=${edge_version}" >> "${GITHUB_ENV}"
+            echo "BING_STATUS=${bing_status}" >> "${GITHUB_ENV}"
+            exit 0
+          fi
+
+          test -n "${BING_APK_URL}"
+          test -n "${EDGE_APK_URL}"
+          case "${BING_APK_URL}" in https://*) ;; *) exit 1 ;; esac
+          case "${EDGE_APK_URL}" in https://*) ;; *) exit 1 ;; esac
+
+          bing_apk="${RUNNER_TEMP}/microsoft-bing.apk"
           edge_apk="${RUNNER_TEMP}/microsoft-edge.apk"
-          bash scripts/download-microsoft-edge-apk.sh "${edge_apk}"
-          sha256sum "${edge_apk}"
+          curl --fail --location --retry 3 --retry-all-errors \
+            "${BING_APK_URL}" --output "${bing_apk}"
+          curl --fail --location --retry 3 --retry-all-errors \
+            "${EDGE_APK_URL}" --output "${edge_apk}"
+          printf '%s  %s\n' \
+            '2962e7b3d6ea97ae49dcfec27e0df48b612e7b119c481f3a38366f2816277aec' \
+            "${bing_apk}" | sha256sum --check --status
+          printf '%s  %s\n' \
+            '3d97a445afa4fc16251a9135ae662f52e16fa9db4bde9f54f1d90666fb892989' \
+            "${edge_apk}" | sha256sum --check --status
+
+          docker cp "${bing_apk}" remote-android:/tmp/microsoft-bing.apk
           docker cp "${edge_apk}" remote-android:/tmp/microsoft-edge.apk
+          bing_signature="$(docker exec remote-android \
+            apksigner verify --print-certs /tmp/microsoft-bing.apk)"
           edge_signature="$(docker exec remote-android \
             apksigner verify --print-certs /tmp/microsoft-edge.apk)"
+          printf '%s\n' "${bing_signature}"
           printf '%s\n' "${edge_signature}"
+          printf '%s\n' "${bing_signature}" | grep -qi \
+            'ac46aba9236ebd5aed35994e9e88ee75d1d6b510e1d5f141b719da62dc3586fa'
           printf '%s\n' "${edge_signature}" | grep -qi \
             '01e1999710a82c2749b4d50c445dc85d670b6136089d0a766a73827c82a1eac9'
-          docker exec remote-android adb install -r /tmp/microsoft-edge.apk
 
+          set +e
+          bing_install_output="$(docker exec remote-android \
+            adb install -r /tmp/microsoft-bing.apk 2>&1)"
+          bing_install_code=$?
+          set -e
+          printf '%s\n' "${bing_install_output}"
+          if [ "${bing_install_code}" -eq 0 ]; then
+            bing_status='installed'
+          elif printf '%s' "${bing_install_output}" \
+            | grep -q 'INSTALL_FAILED_NO_MATCHING_ABIS'; then
+            bing_status='not installed: ARMv7 APK is incompatible'
+            bing_status+=' with x86_64 Android'
+          else
+            echo 'Microsoft Bing installation failed unexpectedly.' >&2
+            exit "${bing_install_code}"
+          fi
+
+          docker exec remote-android adb install -r /tmp/microsoft-edge.apk
           edge_version="$(docker exec remote-android \
             adb shell dumpsys package com.microsoft.emmx | tr -d '\r' \
             | sed -n 's/.*versionName=//p' | head -n 1)"
           test -n "${edge_version}"
-          echo "EDGE_VERSION=${edge_version}" >> "${GITHUB_ENV}"
 
           docker exec remote-android adb logcat -c
           docker exec remote-android adb shell monkey \
             -p com.microsoft.emmx -c android.intent.category.LAUNCHER 1
-          for _ in $(seq 1 15); do
+          for _ in $(seq 1 30); do
+            boot_completed="$(docker exec remote-android \
+              adb shell getprop sys.boot_completed | tr -d '\r')"
             foreground="$(docker exec remote-android \
               adb shell dumpsys activity activities | tr -d '\r' \
               | grep -m 1 'mResumedActivity' || true)"
-            if printf '%s' "${foreground}" | grep -q 'com.microsoft.emmx'; then
+            if [ "${boot_completed}" = '1' ] \
+              && printf '%s' "${foreground}" \
+                | grep -q 'com.microsoft.emmx'; then
               echo "Microsoft Edge ${edge_version} is running."
+              echo "EDGE_VERSION=${edge_version}" >> "${GITHUB_ENV}"
+              echo "BING_STATUS=${bing_status}" >> "${GITHUB_ENV}"
               exit 0
             fi
             sleep 1
@@ -219,6 +287,7 @@ jobs:
             echo 'Password: the `NOVNC_PASSWORD` GitHub Actions secret.'
             echo
             echo "Microsoft Edge: **${EDGE_VERSION}** (installed and launched)."
+            echo "Microsoft Bing: **${BING_STATUS}**."
             echo 'Display: fixed 1080×1920 Android screen, centered and scaled.'
             echo "Session duration: **${SESSION_MINUTES} minutes**."
             echo 'This is a temporary Quick Tunnel for development only.'
@@ -229,6 +298,7 @@ jobs:
             echo 'Username: android'
             echo 'Password: the NOVNC_PASSWORD GitHub Actions secret'
             echo "Microsoft Edge: ${EDGE_VERSION} (installed and launched)"
+            echo "Microsoft Bing: ${BING_STATUS}"
             echo 'Display: fixed 1080x1920, centered and scaled'
             echo "Session duration: ${SESSION_MINUTES} minutes"
           } > "${RUNNER_TEMP}/remote-android-connection.txt"
