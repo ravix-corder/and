@@ -217,14 +217,24 @@ jobs:
                 foreground="$(docker exec remote-android \
                   adb shell dumpsys window windows | tr -d '\r' \
                   | grep -m 1 'mCurrentFocus' || true)"
+                bing_task="$(docker exec remote-android \
+                  adb shell dumpsys activity activities | tr -d '\r' \
+                  | grep -m 1 'topDisplayFocusedRootTask=.*com.microsoft.bing' \
+                  || true)"
                 if printf '%s' "${foreground}" | grep -q 'com.microsoft.bing'; then
                   bing_status="installed and launched (version ${bing_version})"
-                  echo "Microsoft Bing ${bing_status}."
-                  echo "EDGE_STATUS=${edge_status}" >> "${GITHUB_ENV}"
-                  echo "BING_STATUS=${bing_status}" >> "${GITHUB_ENV}"
-                  exit 0
+                elif printf '%s' "${foreground}" \
+                  | grep -q 'GrantPermissionsActivity' \
+                  && [ -n "${bing_task}" ]; then
+                  bing_status="installed and launched (version ${bing_version}); initial permission prompt displayed"
+                else
+                  sleep 1
+                  continue
                 fi
-                sleep 1
+                echo "Microsoft Bing ${bing_status}."
+                echo "EDGE_STATUS=${edge_status}" >> "${GITHUB_ENV}"
+                echo "BING_STATUS=${bing_status}" >> "${GITHUB_ENV}"
+                exit 0
               done
 
               echo 'Microsoft Bing did not reach the foreground.' >&2
