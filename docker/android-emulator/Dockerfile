@@ -9,6 +9,7 @@ ENV ANDROID_HOME=/opt/android-sdk \
     ANDROID_SDK_ROOT=/opt/android-sdk \
     ANDROID_AVD_HOME=/home/android/.android/avd \
     DISPLAY=:0 \
+    XAUTHORITY=/tmp/.Xauthority \
     PATH=/opt/android-python/bin:/opt/android-sdk/cmdline-tools/latest/bin:/opt/android-sdk/emulator:/opt/android-sdk/platform-tools:/opt/android-sdk/build-tools/35.0.0:${PATH}
 
 RUN apt-get update \

@@ -40,6 +40,8 @@ mkdir -p "${ANDROID_AVD_HOME}" /tmp/nginx-client-body /tmp/nginx-proxy \
   /tmp/nginx-fastcgi /tmp/nginx-uwsgi /tmp/nginx-scgi
 rm -f /tmp/android-ready /tmp/.X0-lock /tmp/noVNC.htpasswd
 umask 077
+: > "${XAUTHORITY}"
+chmod 600 "${XAUTHORITY}"
 printf '%s\n' "${NOVNC_PASSWORD}" | htpasswd -i -B -c /tmp/noVNC.htpasswd android > /dev/null
 
 log "Starting virtual display ${DISPLAY} (${EMULATOR_WIDTH}x${EMULATOR_HEIGHT})."
