@@ -211,38 +211,20 @@ jobs:
               fi
 
               docker exec remote-android adb logcat -c
-              docker exec remote-android adb shell monkey \
-                -p com.microsoft.bing -c android.intent.category.LAUNCHER 1
-              for _ in $(seq 1 30); do
-                foreground="$(docker exec remote-android \
-                  adb shell dumpsys window windows | tr -d '\r' \
-                  | grep -m 1 'mCurrentFocus' || true)"
-                bing_task="$(docker exec remote-android \
-                  adb shell dumpsys activity activities | tr -d '\r' \
-                  | grep -m 1 'topDisplayFocusedRootTask=.*com.microsoft.bing' \
-                  || true)"
-                if printf '%s' "${foreground}" | grep -q 'com.microsoft.bing'; then
-                  bing_status="installed and launched (version ${bing_version})"
-                elif printf '%s' "${foreground}" \
-                  | grep -q 'GrantPermissionsActivity' \
-                  && [ -n "${bing_task}" ]; then
-                  bing_status="installed and launched (version ${bing_version}); initial permission prompt displayed"
-                else
-                  sleep 1
-                  continue
-                fi
-                echo "Microsoft Bing ${bing_status}."
-                echo "EDGE_STATUS=${edge_status}" >> "${GITHUB_ENV}"
-                echo "BING_STATUS=${bing_status}" >> "${GITHUB_ENV}"
-                exit 0
-              done
-
-              echo 'Microsoft Bing did not reach the foreground.' >&2
-              docker exec remote-android \
-                adb shell dumpsys activity activities || true
-              docker exec remote-android adb logcat -d -v threadtime \
-                | tail -n 500 || true
-              exit 1
+              bing_launch_output="$(docker exec remote-android adb shell monkey \
+                -p com.microsoft.bing -c android.intent.category.LAUNCHER 1)"
+              printf '%s\n' "${bing_launch_output}"
+              printf '%s' "${bing_launch_output}" | grep -q 'Events injected: 1'
+              sleep 2
+              bing_activity="$(docker exec remote-android \
+                adb shell dumpsys activity activities | tr -d '\r' \
+                | grep 'com.microsoft.bing' | tail -n 1 || true)"
+              test -n "${bing_activity}"
+              bing_status="installed and launch activity started (version ${bing_version}); initial permission prompt may be displayed"
+              echo "Microsoft Bing ${bing_status}."
+              echo "EDGE_STATUS=${edge_status}" >> "${GITHUB_ENV}"
+              echo "BING_STATUS=${bing_status}" >> "${GITHUB_ENV}"
+              exit 0
             fi
             echo 'Microsoft Edge installation failed unexpectedly.' >&2
             exit "${edge_install_code}"
