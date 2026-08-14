@@ -157,9 +157,15 @@ jobs:
             apksigner verify --print-certs /tmp/microsoft-edge.apk)"
           printf '%s\n' "${bing_signature}"
           printf '%s\n' "${edge_signature}"
-          printf '%s\n' "${bing_signature}" | grep -qi \
+          bing_certificate_sha256="$(printf '%s\n' "${bing_signature}" \
+            | sed -n 's/.*certificate SHA-256 digest: //p' \
+            | head -n 1 | tr -d ':\r' | tr '[:upper:]' '[:lower:]')"
+          edge_certificate_sha256="$(printf '%s\n' "${edge_signature}" \
+            | sed -n 's/.*certificate SHA-256 digest: //p' \
+            | head -n 1 | tr -d ':\r' | tr '[:upper:]' '[:lower:]')"
+          test "${bing_certificate_sha256}" = \
             'ac46aba9236ebd5aed35994e9e88ee75d1d6b510e1d5f141b719da62dc3586fa'
-          printf '%s\n' "${edge_signature}" | grep -qi \
+          test "${edge_certificate_sha256}" = \
             '01e1999710a82c2749b4d50c445dc85d670b6136089d0a766a73827c82a1eac9'
 
           set +e
