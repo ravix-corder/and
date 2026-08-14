@@ -215,8 +215,8 @@ jobs:
                 -p com.microsoft.bing -c android.intent.category.LAUNCHER 1
               for _ in $(seq 1 30); do
                 foreground="$(docker exec remote-android \
-                  adb shell dumpsys activity activities | tr -d '\r' \
-                  | grep -m 1 'mResumedActivity' || true)"
+                  adb shell dumpsys window windows | tr -d '\r' \
+                  | grep -m 1 'mCurrentFocus' || true)"
                 if printf '%s' "${foreground}" | grep -q 'com.microsoft.bing'; then
                   bing_status="installed and launched (version ${bing_version})"
                   echo "Microsoft Bing ${bing_status}."
@@ -248,8 +248,8 @@ jobs:
             -p com.microsoft.emmx -c android.intent.category.LAUNCHER 1
           for _ in $(seq 1 30); do
             foreground="$(docker exec remote-android \
-              adb shell dumpsys activity activities | tr -d '\r' \
-              | grep -m 1 'mResumedActivity' || true)"
+              adb shell dumpsys window windows | tr -d '\r' \
+              | grep -m 1 'mCurrentFocus' || true)"
             if printf '%s' "${foreground}" | grep -q 'com.microsoft.emmx'; then
               edge_status="installed and launched (version ${edge_version})"
               echo "Microsoft Edge ${edge_status}."
