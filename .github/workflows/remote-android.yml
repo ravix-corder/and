@@ -100,8 +100,8 @@ jobs:
             --memory=6g \
             --security-opt no-new-privileges:true \
             --env NOVNC_PASSWORD \
-            --env EMULATOR_WIDTH=1920 \
-            --env EMULATOR_HEIGHT=1080 \
+            --env EMULATOR_WIDTH=1080 \
+            --env EMULATOR_HEIGHT=1920 \
             --env EMULATOR_DENSITY=420 \
             --env OPENAI_API_KEY \
             --env HF_TOKEN \
@@ -367,7 +367,7 @@ jobs:
             echo
             echo "Microsoft Edge: **${EDGE_STATUS}**."
             echo "Microsoft Bing: **${BING_STATUS}**."
-            echo 'Display: large 1920×1080 landscape Android screen with standard Android UI, directly scaled to the browser.'
+            echo 'Display: standard 1080×1920 portrait Android phone screen with standard Android UI, directly scaled to the browser.'
             echo "Session duration: **${SESSION_MINUTES} minutes**."
             echo 'This is a temporary Quick Tunnel for development only.'
           } >> "${GITHUB_STEP_SUMMARY}"
@@ -378,7 +378,7 @@ jobs:
             echo 'Password: the NOVNC_PASSWORD GitHub Actions secret'
             echo "Microsoft Edge: ${EDGE_STATUS}"
             echo "Microsoft Bing: ${BING_STATUS}"
-            echo 'Display: large 1920x1080 landscape Android screen with standard Android UI, directly scaled to the browser'
+            echo 'Display: standard 1080x1920 portrait Android phone screen with standard Android UI, directly scaled to the browser'
             echo "Session duration: ${SESSION_MINUTES} minutes"
           } > "${RUNNER_TEMP}/remote-android-connection.txt"
 

@@ -126,9 +126,9 @@ fi
 adb shell settings put global window_animation_scale 0 || true
 adb shell settings put global transition_animation_scale 0 || true
 adb shell settings put global animator_duration_scale 0 || true
-# 横長の大画面レイアウトを維持し、Android の標準 UI をそのまま表示する。
+# 標準的な縦長スマホの自然な向き（1080×1920）を維持する。
 adb shell settings put system accelerometer_rotation 0 || true
-adb shell settings put system user_rotation 1 || true
+adb shell settings put system user_rotation 0 || true
 touch /tmp/android-ready
 
 log "Android is ready. Authenticated noVNC is listening on port ${NOVNC_PORT}."
