@@ -40,6 +40,21 @@ GitHub の **Actions** タブで **Remote Android 14 (Google Play)** を選択�
 
 セッションは選択した時間で自動終了します。すぐ終了させるときは Actions の該当ジョブをキャンセルしてください。どちらの場合も後処理がコンテナと Quick Tunnel のプロセスを停止します。
 
+## コンテナ内コマンドと Python 環境
+
+Android と同じコンテナには、コマンドシェル、`adb`、Python 3、`mss`、`pyautogui`、`openai`、`huggingface_hub`、`transformers` を導入しています。ワークフロー実行時の **container_command** にコマンドまたは Python スクリプトを入力すると、Android の起動後に `android` ユーザーとしてコンテナ内で実行されます。入力値はホスト側で展開せず、コンテナ内の `bash` に標準入力として渡されます。
+
+| 目的 | `container_command` の例 |
+| --- | --- |
+| 利用可能なモジュール確認 | `python3 /usr/local/bin/verify-python-environment` |
+| Android の状態確認 | `adb shell getprop sys.boot_completed` |
+| 画面サイズ確認 | `python3 -c 'import pyautogui; print(pyautogui.size())'` |
+| 画面取得 | `python3 -c 'from mss import mss; print(mss().monitors[1])'` |
+
+標準のワークフローでも、外部 API 呼び出し・マウスクリック・キーボード入力を行わない読み取り専用の Python 検証を実行します。`OPENAI_API_KEY` と `HF_TOKEN` は**任意**の Repository secret です。OpenAI API や認証が必要な Hugging Face モデルを自分のコードから使う場合にのみ設定してください。これらの値はコンテナへ環境変数として渡されますが、ログへ出力してはいけません。
+
+> `container_command` はコンテナ内で任意のコマンドを実行できます。信頼できるコマンドだけを指定し、シークレットを表示するコマンド、Android の停止・初期化、外部への不要なデータ送信は避けてください。セッション終了時にはコンテナと一時 VM が破棄されます。
+
 ## Quick Tunnel の制約
 
 Quick Tunnel はテスト・開発用途向けであり、永続 URL、SLA、Cloudflare Access、固定ドメインを提供しません。毎回 URL が変わり、Cloudflare は可用性を保証しません。また、同時プロキシ要求には 200 件の上限があり、Server-Sent Events は利用できません。[3] 本構成は一人の短時間操作に限定し、機密性の高いデータを扱わないでください。
@@ -52,6 +67,7 @@ Quick Tunnel はテスト・開発用途向けであり、永続 URL、SLA、Clo
 | `docker/android-emulator/Dockerfile` | Android 14 / Google Play システムイメージと認証用 Nginx を組み込むコンテナ定義です。 |
 | `docker/android-emulator/nginx.conf` | noVNC の HTTP と WebSocket を HTTP Basic 認証付きで中継します。 |
 | `docker/android-emulator/entrypoint.sh` | Xvfb、x11vnc、noVNC、Nginx、Android Emulator を起動し、ブート完了を判定します。 |
+| `docker/android-emulator/verify-python-environment.py` | 画面取得・自動操作・AI SDK を外部通信や入力操作なしで確認する Python 検証スクリプトです。 |
 | `docs/research-notes.md` | 設計時に確認した仕様と出典です。 |
 
 ## 参考文献

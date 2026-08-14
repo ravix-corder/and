@@ -27,6 +27,11 @@ name: Remote Android 14 (Google Play)
         description: 'HTTPS URL of the signed x86 Microsoft Edge APK'
         required: false
         type: string
+      container_command:
+        description: 'Optional command to run inside the ready Android container as the android user'
+        required: false
+        default: ''
+        type: string
 
 permissions:
   contents: read
@@ -47,6 +52,9 @@ jobs:
       INSTALL_USER_APKS: ${{ inputs.install_user_apks }}
       BING_APK_URL: ${{ inputs.bing_apk_url }}
       EDGE_APK_URL: ${{ inputs.edge_apk_url }}
+      CONTAINER_COMMAND: ${{ inputs.container_command }}
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+      HF_TOKEN: ${{ secrets.HF_TOKEN }}
 
     steps:
       - name: Check out repository
@@ -95,6 +103,8 @@ jobs:
             --env EMULATOR_WIDTH=1920 \
             --env EMULATOR_HEIGHT=1080 \
             --env EMULATOR_DENSITY=420 \
+            --env OPENAI_API_KEY \
+            --env HF_TOKEN \
             "${IMAGE_NAME}"
 
           for _ in $(seq 1 360); do
@@ -261,6 +271,25 @@ jobs:
           docker exec remote-android adb logcat -d -v threadtime \
             | tail -n 500 || true
           exit 1
+
+      - name: Verify container commands and Python automation environment
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          docker exec remote-android sh -lc '
+            command -v bash
+            command -v python3
+            command -v pip3
+            command -v adb
+            python3 /usr/local/bin/verify-python-environment
+          '
+
+      - name: Run optional container command
+        if: ${{ inputs.container_command != '' }}
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          printf '%s\n' "${CONTAINER_COMMAND}" | docker exec -i remote-android bash -s
 
       - name: Verify local noVNC authentication
         shell: bash

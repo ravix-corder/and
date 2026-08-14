@@ -22,7 +22,11 @@ RUN apt-get update \
         openjdk-17-jre-headless \
         novnc \
         procps \
+        python3 \
+        python3-pip \
         python3-numpy \
+        python3-tk \
+        libxtst6 \
         tini \
         unzip \
         websockify \
@@ -60,11 +64,18 @@ RUN apt-get update \
         'hw.gpu.enabled=yes' \
         'hw.gpu.mode=swiftshader_indirect' \
         >> /home/android/.android/avd/remote_android_14.avd/config.ini \
+    && python3 -m pip install --no-cache-dir --break-system-packages \
+        mss \
+        pyautogui \
+        openai \
+        huggingface_hub \
+        transformers \
     && chown -R android:android /home/android /opt/android-sdk
 
 COPY docker/android-emulator/nginx.conf /etc/nginx/nginx.conf
 COPY docker/android-emulator/viewer.html /usr/share/nginx/html/viewer.html
 COPY --chmod=0755 docker/android-emulator/entrypoint.sh /usr/local/bin/start-android
+COPY --chmod=0755 docker/android-emulator/verify-python-environment.py /usr/local/bin/verify-python-environment
 
 USER android
 WORKDIR /home/android
