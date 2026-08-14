@@ -100,6 +100,7 @@
       <button id="fit-button" type="button" aria-pressed="false">標準</button>
       <button id="zoom-button" type="button" aria-pressed="true">拡大</button>
       <button id="move-button" type="button" aria-pressed="false" disabled>画面を移動</button>
+      <button id="fullscreen-button" type="button" aria-pressed="false">全画面表示</button>
     </nav>
     <p id="display-hint">拡大表示中です。画面全体を確認する場合だけ「標準」を押してください。</p>
     <script type="module">
@@ -109,6 +110,7 @@
       const fitButton = document.getElementById('fit-button');
       const zoomButton = document.getElementById('zoom-button');
       const moveButton = document.getElementById('move-button');
+      const fullscreenButton = document.getElementById('fullscreen-button');
       const hint = document.getElementById('display-hint');
       const websocketProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
       const websocketUrl = `${websocketProtocol}//${window.location.host}/websockify`;
@@ -117,6 +119,12 @@
       // 縦長端末を小さく全体縮小しないため、初期表示は拡大モードにする。
       let zoomed = true;
       let moving = false;
+
+      function updateFullscreenControl() {
+        const fullscreen = document.fullscreenElement === document.documentElement;
+        fullscreenButton.setAttribute('aria-pressed', String(fullscreen));
+        fullscreenButton.textContent = fullscreen ? '全画面を終了' : '全画面表示';
+      }
 
       function updateControls() {
         fitButton.setAttribute('aria-pressed', String(!zoomed));
@@ -127,8 +135,9 @@
         hint.textContent = zoomed
           ? (moving
               ? '画面をドラッグして位置を変え、「操作へ戻る」を押してください。'
-              : '拡大表示中です。必要な場合は「画面を移動」を押して表示位置を変えられます。')
+              : '拡大表示中です。「全画面表示」でブラウザの表示領域全体を使えます。')
           : '全体表示中です。「拡大」を押すと Android 映像を大きく表示します。';
+        updateFullscreenControl();
       }
 
       function applyDisplayMode() {
@@ -166,6 +175,24 @@
         if (!zoomed) return;
         moving = !moving;
         applyDisplayMode();
+      });
+
+      fullscreenButton.addEventListener('click', async () => {
+        try {
+          if (document.fullscreenElement) {
+            await document.exitFullscreen();
+          } else {
+            await document.documentElement.requestFullscreen({ navigationUI: 'hide' });
+          }
+        } catch (error) {
+          hint.textContent = '全画面表示に切り替えられませんでした。ブラウザの全画面機能を許可してから再度お試しください。';
+          console.error('Fullscreen request failed:', error);
+        }
+      });
+
+      document.addEventListener('fullscreenchange', updateFullscreenControl);
+      document.addEventListener('fullscreenerror', () => {
+        updateFullscreenControl();
       });
 
       updateControls();
