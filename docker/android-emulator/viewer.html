@@ -97,11 +97,11 @@
       <div id="screen" aria-label="Android remote display"></div>
     </main>
     <nav id="display-controls" aria-label="表示操作">
-      <button id="fit-button" type="button" aria-pressed="true">標準</button>
-      <button id="zoom-button" type="button" aria-pressed="false">拡大</button>
+      <button id="fit-button" type="button" aria-pressed="false">標準</button>
+      <button id="zoom-button" type="button" aria-pressed="true">拡大</button>
       <button id="move-button" type="button" aria-pressed="false" disabled>画面を移動</button>
     </nav>
-    <p id="display-hint">「拡大」で Android UI は変えずに映像だけを大きく表示します。</p>
+    <p id="display-hint">拡大表示中です。画面全体を確認する場合だけ「標準」を押してください。</p>
     <script type="module">
       import RFB from '/core/rfb.js';
 
@@ -114,7 +114,8 @@
       const websocketUrl = `${websocketProtocol}//${window.location.host}/websockify`;
       let rfb;
       let reconnectTimer;
-      let zoomed = false;
+      // 縦長端末を小さく全体縮小しないため、初期表示は拡大モードにする。
+      let zoomed = true;
       let moving = false;
 
       function updateControls() {
@@ -127,7 +128,7 @@
           ? (moving
               ? '画面をドラッグして位置を変え、「操作へ戻る」を押してください。'
               : '拡大表示中です。必要な場合は「画面を移動」を押して表示位置を変えられます。')
-          : '「拡大」で Android UI は変えずに映像だけを大きく表示します。';
+          : '全体表示中です。「拡大」を押すと Android 映像を大きく表示します。';
       }
 
       function applyDisplayMode() {
