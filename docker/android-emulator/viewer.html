@@ -1,13 +1,13 @@
 <!doctype html>
-<html lang="en">
+<html lang="ja">
   <head>
     <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
     <meta name="color-scheme" content="dark">
     <title>Remote Android</title>
     <style>
       :root {
-        background: #101418;
+        background: #000;
       }
 
       * {
@@ -24,44 +24,55 @@
         background: #000;
       }
 
-      main {
-        display: flex;
-        align-items: center;
-        justify-content: center;
+      main,
+      #screen {
         width: 100vw;
         height: 100dvh;
         margin: 0;
-        padding: 0;
+        overflow: hidden;
+        background: #000;
       }
 
-      iframe {
-        width: min(100vw, calc(100dvh * 9 / 16));
-        height: 100dvh;
-        border: 0;
-        background: #000;
+      #screen {
+        touch-action: none;
       }
 
       @supports not (height: 100dvh) {
         html,
         body,
         main,
-        iframe {
+        #screen {
           height: 100vh;
-        }
-
-        iframe {
-          width: min(100vw, calc(100vh * 9 / 16));
         }
       }
     </style>
   </head>
   <body>
     <main>
-      <iframe
-        title="Android remote display"
-        src="/vnc.html?autoconnect=true&amp;reconnect=true&amp;reconnect_delay=1000&amp;resize=scale&amp;quality=6"
-        allow="clipboard-read; clipboard-write"
-      ></iframe>
+      <div id="screen" aria-label="Android remote display"></div>
     </main>
+    <script type="module">
+      import RFB from '/core/rfb.js';
+
+      const screen = document.getElementById('screen');
+      const websocketProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+      const websocketUrl = `${websocketProtocol}//${window.location.host}/websockify`;
+      let rfb;
+      let reconnectTimer;
+
+      function connect() {
+        window.clearTimeout(reconnectTimer);
+        rfb = new RFB(screen, websocketUrl);
+        rfb.scaleViewport = true;
+        rfb.clipViewport = false;
+        rfb.viewOnly = false;
+
+        rfb.addEventListener('disconnect', () => {
+          reconnectTimer = window.setTimeout(connect, 1000);
+        });
+      }
+
+      connect();
+    </script>
   </body>
 </html>
