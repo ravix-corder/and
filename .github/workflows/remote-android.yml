@@ -92,6 +92,9 @@ jobs:
             --memory=6g \
             --security-opt no-new-privileges:true \
             --env NOVNC_PASSWORD \
+            --env EMULATOR_WIDTH=1920 \
+            --env EMULATOR_HEIGHT=1080 \
+            --env EMULATOR_DENSITY=560 \
             "${IMAGE_NAME}"
 
           for _ in $(seq 1 360); do
