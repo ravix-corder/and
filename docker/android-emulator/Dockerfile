@@ -9,7 +9,7 @@ ENV ANDROID_HOME=/opt/android-sdk \
     ANDROID_SDK_ROOT=/opt/android-sdk \
     ANDROID_AVD_HOME=/home/android/.android/avd \
     DISPLAY=:0 \
-    PATH=/opt/android-sdk/cmdline-tools/latest/bin:/opt/android-sdk/emulator:/opt/android-sdk/platform-tools:/opt/android-sdk/build-tools/35.0.0:${PATH}
+    PATH=/opt/android-python/bin:/opt/android-sdk/cmdline-tools/latest/bin:/opt/android-sdk/emulator:/opt/android-sdk/platform-tools:/opt/android-sdk/build-tools/35.0.0:${PATH}
 
 RUN apt-get update \
     && apt-get install --no-install-recommends -y \
@@ -24,6 +24,7 @@ RUN apt-get update \
         procps \
         python3 \
         python3-pip \
+        python3-venv \
         python3-numpy \
         python3-tk \
         libxtst6 \
@@ -64,13 +65,14 @@ RUN apt-get update \
         'hw.gpu.enabled=yes' \
         'hw.gpu.mode=swiftshader_indirect' \
         >> /home/android/.android/avd/remote_android_14.avd/config.ini \
-    && python3 -m pip install --no-cache-dir --break-system-packages \
+    && python3 -m venv /opt/android-python \
+    && /opt/android-python/bin/pip install --no-cache-dir \
         mss \
         pyautogui \
         openai \
         huggingface_hub \
         transformers \
-    && chown -R android:android /home/android /opt/android-sdk
+    && chown -R android:android /home/android /opt/android-sdk /opt/android-python
 
 COPY docker/android-emulator/nginx.conf /etc/nginx/nginx.conf
 COPY docker/android-emulator/viewer.html /usr/share/nginx/html/viewer.html
