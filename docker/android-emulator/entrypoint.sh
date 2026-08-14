@@ -56,7 +56,8 @@ for _ in $(seq 1 30); do
 done
 xdpyinfo -display "${DISPLAY}" >/dev/null
 
-openbox > /tmp/openbox.log 2>&1 &
+# Android エミュレータを仮想ディスプレイ全体へ直接表示する。ウィンドウ
+# マネージャーを起動しないため、Linux 側の最小化・閉じるボタンは表示されない。
 x11vnc \
   -display "${DISPLAY}" \
   -localhost \
