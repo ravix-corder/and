@@ -122,14 +122,19 @@ jobs:
         shell: bash
         run: |
           set -Eeuo pipefail
-          edge_version='not installed'
+          edge_status='not requested'
           bing_status='not requested'
           if [ "${INSTALL_USER_APKS}" != 'true' ]; then
             echo 'No user APK installation was requested.'
-            echo "EDGE_VERSION=${edge_version}" >> "${GITHUB_ENV}"
+            echo "EDGE_STATUS=${edge_status}" >> "${GITHUB_ENV}"
             echo "BING_STATUS=${bing_status}" >> "${GITHUB_ENV}"
             exit 0
           fi
+
+          android_boot_completed="$(docker exec remote-android \
+            adb shell getprop sys.boot_completed | tr -d '\r')"
+          test "${android_boot_completed}" = '1'
+          echo 'Android 14 boot verification passed.'
 
           test -n "${BING_APK_URL}"
           test -n "${EDGE_APK_URL}"
@@ -185,7 +190,25 @@ jobs:
             exit "${bing_install_code}"
           fi
 
-          docker exec remote-android adb install -r /tmp/microsoft-edge.apk
+          set +e
+          edge_install_output="$(docker exec remote-android \
+            adb install -r /tmp/microsoft-edge.apk 2>&1)"
+          edge_install_code=$?
+          set -e
+          printf '%s\n' "${edge_install_output}"
+          if [ "${edge_install_code}" -ne 0 ]; then
+            if printf '%s' "${edge_install_output}" \
+              | grep -q 'INSTALL_FAILED_NO_MATCHING_ABIS'; then
+              edge_status='not installed: x86 APK is incompatible with x86_64 Android'
+              echo "${edge_status}."
+              echo "EDGE_STATUS=${edge_status}" >> "${GITHUB_ENV}"
+              echo "BING_STATUS=${bing_status}" >> "${GITHUB_ENV}"
+              exit 0
+            fi
+            echo 'Microsoft Edge installation failed unexpectedly.' >&2
+            exit "${edge_install_code}"
+          fi
+
           edge_version="$(docker exec remote-android \
             adb shell dumpsys package com.microsoft.emmx | tr -d '\r' \
             | sed -n 's/.*versionName=//p' | head -n 1)"
@@ -195,16 +218,13 @@ jobs:
           docker exec remote-android adb shell monkey \
             -p com.microsoft.emmx -c android.intent.category.LAUNCHER 1
           for _ in $(seq 1 30); do
-            boot_completed="$(docker exec remote-android \
-              adb shell getprop sys.boot_completed | tr -d '\r')"
             foreground="$(docker exec remote-android \
               adb shell dumpsys activity activities | tr -d '\r' \
               | grep -m 1 'mResumedActivity' || true)"
-            if [ "${boot_completed}" = '1' ] \
-              && printf '%s' "${foreground}" \
-                | grep -q 'com.microsoft.emmx'; then
-              echo "Microsoft Edge ${edge_version} is running."
-              echo "EDGE_VERSION=${edge_version}" >> "${GITHUB_ENV}"
+            if printf '%s' "${foreground}" | grep -q 'com.microsoft.emmx'; then
+              edge_status="installed and launched (version ${edge_version})"
+              echo "Microsoft Edge ${edge_status}."
+              echo "EDGE_STATUS=${edge_status}" >> "${GITHUB_ENV}"
               echo "BING_STATUS=${bing_status}" >> "${GITHUB_ENV}"
               exit 0
             fi
@@ -292,7 +312,7 @@ jobs:
             echo 'Username: `android`'
             echo 'Password: the `NOVNC_PASSWORD` GitHub Actions secret.'
             echo
-            echo "Microsoft Edge: **${EDGE_VERSION}** (installed and launched)."
+            echo "Microsoft Edge: **${EDGE_STATUS}**."
             echo "Microsoft Bing: **${BING_STATUS}**."
             echo 'Display: fixed 1080×1920 Android screen, centered and scaled.'
             echo "Session duration: **${SESSION_MINUTES} minutes**."
@@ -303,7 +323,7 @@ jobs:
             echo "noVNC URL: ${remote_url}"
             echo 'Username: android'
             echo 'Password: the NOVNC_PASSWORD GitHub Actions secret'
-            echo "Microsoft Edge: ${EDGE_VERSION} (installed and launched)"
+            echo "Microsoft Edge: ${EDGE_STATUS}"
             echo "Microsoft Bing: ${BING_STATUS}"
             echo 'Display: fixed 1080x1920, centered and scaled'
             echo "Session duration: ${SESSION_MINUTES} minutes"
